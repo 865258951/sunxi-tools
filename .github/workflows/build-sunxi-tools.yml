@@ -1,13 +1,13 @@
-name: Build sunxi-tools (Win & Linux)
+name: Build sunxi-tools (Fix Dependencies)
 
 on:
-  workflow_dispatch: # 允许手动触发
+  workflow_dispatch:
   push:
     branches: [ "main", "master" ]
 
 jobs:
   # ==========================================
-  # 任务 1: 编译 Linux 版本 (Native Build)
+  # 任务 1: Linux 版本 (修复了 libfdt 报错)
   # ==========================================
   build-linux:
     runs-on: ubuntu-latest
@@ -21,12 +21,13 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libusb-1.0-0-dev pkg-config zlib1g-dev
+          # 关键修复：添加了 libfdt-dev 和 device-tree-compiler
+          sudo apt-get install -y libusb-1.0-0-dev pkg-config zlib1g-dev libfdt-dev device-tree-compiler
 
       - name: Build
         run: |
           make
-          # 整理输出文件
+          # 整理输出
           mkdir output
           cp sunxi-fel output/
           cp sunxi-fisc-dump output/
@@ -40,10 +41,13 @@ jobs:
           path: output/
 
   # ==========================================
-  # 任务 2: 编译 Windows 版本 (Cross Compile)
+  # 任务 2: Windows 版本 (使用 MSYS2 原生编译)
   # ==========================================
   build-windows:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
     steps:
       - name: Checkout Source
         uses: actions/checkout@v4
@@ -51,42 +55,37 @@ jobs:
           repository: linux-sunxi/sunxi-tools
           ref: master
 
-      - name: Install MinGW & Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y mingw-w64 make pkg-config p7zip-full wget
-
-      # 下载 Windows 版的 LibUSB 库文件 (因为是交叉编译，不能用 apt 安装的 linux libusb)
-      - name: Download LibUSB for Windows
-        run: |
-          wget https://github.com/libusb/libusb/releases/download/v1.0.27/libusb-1.0.27-binaries.7z
-          7z x libusb-1.0.27-binaries.7z -olibusb_win
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          # 自动安装所有需要的 Windows 版依赖库
+          install: >-
+            git
+            make
+            gcc
+            pkg-config
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-libusb
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-dtc
 
       - name: Build for Windows
         run: |
-          # 设置编译器为 MinGW-w64 (64位 Windows)
-          export CC=x86_64-w64-mingw32-gcc
-          
-          # 指定头文件和库文件的路径 (指向刚才下载的 libusb_win)
-          # -static: 静态链接，确保生成的 exe 不需要额外的 dll 就能运行
-          export CFLAGS="-I$(pwd)/libusb_win/include/libusb-1.0 -O2 -Wall -Wextra"
-          export LDFLAGS="-L$(pwd)/libusb_win/MinGW64/static -static"
-          export LIBS="-lusb-1.0"
-          
-          # 开始编译核心工具
-          $CC $CFLAGS -c fel.c -o fel.o
-          $CC $CFLAGS -c fel-spiflash.c -o fel-spiflash.o
-          $CC $CFLAGS -c progress.c -o progress.o
-          
-          # 链接生成 sunxi-fel.exe
-          $CC $LDFLAGS -o sunxi-fel.exe fel.o fel-spiflash.o progress.o $LIBS
-          
-          # 编译 boot info 工具
-          $CC $CFLAGS $LDFLAGS -o sunxi-boot.exe bootinfo.c $LIBS
+          # 编译所有工具
+          make CC=gcc PKG_CONFIG=pkg-config
 
           # 整理输出
           mkdir output
-          mv *.exe output/
+          cp sunxi-fel.exe output/
+          cp sunxi-boot.exe output/
+          # 还需要拷贝依赖的 DLL，否则下载后无法运行
+          cp /mingw64/bin/libusb-1.0.dll output/
+          cp /mingw64/bin/zlib1.dll output/
+          # 注意：libwinpthread-1.dll 和 libgcc_s_seh-1.dll 可能也需要
+          cp /mingw64/bin/libwinpthread-1.dll output/
+          cp /mingw64/bin/libgcc_s_seh-1.dll output/
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
