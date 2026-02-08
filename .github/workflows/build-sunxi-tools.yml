@@ -1,4 +1,4 @@
-name: Build sunxi-tools (Fix Dependencies)
+name: Build sunxi-tools (Fixed Copy Paths)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   # ==========================================
-  # 任务 1: Linux 版本 (修复了 libfdt 报错)
+  # 任务 1: Linux 版本
   # ==========================================
   build-linux:
     runs-on: ubuntu-latest
@@ -21,18 +21,17 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          # 关键修复：添加了 libfdt-dev 和 device-tree-compiler
           sudo apt-get install -y libusb-1.0-0-dev pkg-config zlib1g-dev libfdt-dev device-tree-compiler
 
       - name: Build
         run: |
           make
-          # 整理输出
+          # 整理输出 (仅复制实际生成的关键工具)
           mkdir output
           cp sunxi-fel output/
-          cp sunxi-fisc-dump output/
           cp sunxi-nand-part output/
-          cp sunxi-boot output/
+          cp sunxi-bootinfo output/
+          cp sunxi-fexc output/
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
@@ -41,7 +40,7 @@ jobs:
           path: output/
 
   # ==========================================
-  # 任务 2: Windows 版本 (使用 MSYS2 原生编译)
+  # 任务 2: Windows 版本 (MSYS2)
   # ==========================================
   build-windows:
     runs-on: windows-latest
@@ -60,7 +59,6 @@ jobs:
         with:
           msystem: MINGW64
           update: true
-          # 自动安装所有需要的 Windows 版依赖库
           install: >-
             git
             make
@@ -73,17 +71,18 @@ jobs:
 
       - name: Build for Windows
         run: |
-          # 编译所有工具
           make CC=gcc PKG_CONFIG=pkg-config
 
-          # 整理输出
+          # 整理输出 (修正了文件名)
           mkdir output
           cp sunxi-fel.exe output/
-          cp sunxi-boot.exe output/
-          # 还需要拷贝依赖的 DLL，否则下载后无法运行
+          cp sunxi-bootinfo.exe output/
+          cp sunxi-nand-part.exe output/
+          cp sunxi-fexc.exe output/
+          
+          # 复制依赖的 DLL (有了这些，你的 exe 才能在别的电脑运行)
           cp /mingw64/bin/libusb-1.0.dll output/
           cp /mingw64/bin/zlib1.dll output/
-          # 注意：libwinpthread-1.dll 和 libgcc_s_seh-1.dll 可能也需要
           cp /mingw64/bin/libwinpthread-1.dll output/
           cp /mingw64/bin/libgcc_s_seh-1.dll output/
 
