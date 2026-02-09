@@ -1,4 +1,4 @@
- name: Build sunxi-tools (Fix Missing DLL)
+name: Build sunxi-tools
 
 on:
   workflow_dispatch:
