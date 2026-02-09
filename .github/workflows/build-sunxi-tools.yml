@@ -1,4 +1,4 @@
-name: Build sunxi-tools (Fixed Copy Paths)
+ name: Build sunxi-tools (Fix Missing DLL)
 
 on:
   workflow_dispatch:
@@ -26,7 +26,6 @@ jobs:
       - name: Build
         run: |
           make
-          # 整理输出 (仅复制实际生成的关键工具)
           mkdir output
           cp sunxi-fel output/
           cp sunxi-nand-part output/
@@ -73,18 +72,25 @@ jobs:
         run: |
           make CC=gcc PKG_CONFIG=pkg-config
 
-          # 整理输出 (修正了文件名)
+          # 整理输出
           mkdir output
           cp sunxi-fel.exe output/
           cp sunxi-bootinfo.exe output/
           cp sunxi-nand-part.exe output/
           cp sunxi-fexc.exe output/
           
-          # 复制依赖的 DLL (有了这些，你的 exe 才能在别的电脑运行)
+          # --- 关键修复：复制所有依赖的 DLL ---
+          echo "Copying dependencies..."
           cp /mingw64/bin/libusb-1.0.dll output/
           cp /mingw64/bin/zlib1.dll output/
+          # 这里是之前缺失的文件：
+          cp /mingw64/bin/libfdt-1.dll output/
+          
+          # 基础运行库
           cp /mingw64/bin/libwinpthread-1.dll output/
           cp /mingw64/bin/libgcc_s_seh-1.dll output/
+          # 保险起见，加上标准C++库（有些环境的 libfdt 可能会依赖）
+          cp /mingw64/bin/libstdc++-6.dll output/
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
